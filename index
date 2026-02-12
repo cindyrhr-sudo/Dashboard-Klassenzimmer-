@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>Klassenzimmer-Board 3.0 - Stabil</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Andika&family=Lora:ital,wght@0,400..700;1,400..700&family=Patrick+Hand&display=swap" rel="stylesheet">
+    
+    <style>
+        :root { --board-bg: #1a252f; --sidebar-bg: #161b22; --accent: #27ae60; }
+        * { box-sizing: border-box; font-family: 'Andika', sans-serif; }
+        body { background-color: var(--board-bg); margin: 0; display: flex; height: 100vh; overflow: hidden; }
+        #sidebar { width: 85px; background: var(--sidebar-bg); display: flex; flex-direction: column; align-items: center; padding-top: 20px; gap: 10px; z-index: 2000; border-right: 2px solid rgba(255,255,255,0.1); }
+        .side-btn { width: 65px; height: 65px; border-radius: 15px; border: none; cursor: pointer; font-size: 28px; color: white; display: flex; align-items: center; justify-content: center; transition: transform 0.2s; }
+        .btn-plus { background: var(--accent); }
+        .btn-save { background: #2980b9; margin-top: 5px; font-size: 22px; }
+        #kindergarten { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; width: 100%; align-items: center; }
+        .btn-parked { background: #4b5d67; border: 2px solid rgba(255,255,255,0.3); opacity: 0.5; }
+        .btn-parked.active { border-color: var(--accent); opacity: 1; box-shadow: 0 0 10px var(--accent); background: #5d6d7e; }
+        #workspace { flex-grow: 1; position: relative; touch-action: none; overflow: hidden; }
+        .widget { position: absolute; background: var(--w-bg); border-radius: 15px; box-shadow: 0 10px 40px rgba(0,0,0,0.5); display: flex; flex-direction: column; border: 3px solid var(--w-border); min-width: 300px; min-height: 200px; z-index: 10; overflow: hidden; }
+        
+        .widget.fullsize { top: 10px !important; left: 10px !important; width: calc(100% - 20px) !important; height: calc(100% - 20px) !important; z-index: 1500 !important; }
+
+        .widget.theme-sepia { --w-bg: #fdf6e3; --w-text: #5f4b32; --w-header: #d3cbb3; --w-border: #c4ba9f; }
+        .widget.theme-dark { --w-bg: #051a14; --w-text: #e0eee0; --w-header: #0a3d2e; --w-border: #0d4d3a; }
+        .widget-header { background: var(--w-header); height: 50px; cursor: move; display: flex; justify-content: space-between; align-items: center; padding: 0 15px; color: white; font-size: 20px; flex-shrink: 0; }
+        .header-controls { display: flex; gap: 10px; align-items: center; }
+        .header-icon { cursor: pointer; font-size: 22px; user-select: none; }
+        .widget-content { padding: 12px; flex-grow: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+        .toolbar, .draw-palette { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; border-bottom: 1px solid rgba(0,0,0,0.1); padding-bottom: 10px; z-index: 110; align-items: center; }
+        .draw-palette { display: none; background: rgba(0,0,0,0.05); padding: 8px; border-radius: 8px; }
+        .widget.draw-mode .draw-palette { display: flex; }
+        .settings-panel { display: none; background: rgba(0,0,0,0.05); padding: 8px; border-radius: 8px; margin-bottom: 8px; }
+        .widget.show-settings .settings-panel { display: flex; flex-direction: column; gap: 5px; }
+        select, .ctrl-btn, .tp-input { padding: 5px; cursor: pointer; border: 1px solid #ccc; border-radius: 4px; background: white; height: 35px; min-width: 35px; }
+        .color-btn { width: 25px; height: 25px; border-radius: 50%; cursor: pointer; border: 2px solid rgba(0,0,0,0.2); }
+        .editor { width: 100%; flex-grow: 1; border: none; outline: none; background: transparent; color: var(--w-text); font-size: 32px; overflow-y: auto; z-index: 10; padding: 10px; line-height: 1.6; }
+        .drawing-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 50; }
+        .widget.draw-mode .drawing-canvas { pointer-events: auto; }
+        .tp-container { display: flex; flex-direction: column; gap: 8px; height: 100%; justify-content: center; }
+        .tp-btn { padding: 12px; border-radius: 12px; border: 2px solid var(--w-border); background: var(--w-header); color: white; cursor: pointer; font-weight: bold; transition: 0.2s; }
+        .tp-btn:active { transform: scale(0.95); }
+        .tp-row { display: flex; gap: 5px; align-items: center; background: rgba(0,0,0,0.05); padding: 5px; border-radius: 5px; }
+        .img-display { width: 100%; height: 100%; object-fit: contain; border-radius: 8px; }
+        .timer-display { font-size: 80px; font-weight: bold; text-align: center; color: var(--w-text); margin: auto; }
+        .wheel-wrap { flex-grow: 1; display: flex; justify-content: center; align-items: center; min-height: 0; position: relative; overflow: hidden; }
+        .wheel-canvas { width: auto; height: 90%; aspect-ratio: 1/1; max-width: 95%; object-fit: contain; transition: transform 4s cubic-bezier(0.15, 0, 0.15, 1); border-radius: 50%; }
+        #menu { position: absolute; left: 100px; top: 20px; background: white; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); display: none; z-index: 3000; width: 220px; border: 2px solid var(--accent); overflow: hidden; }
+        #menu button { display: block; width: 100%; padding: 15px; border: none; background: none; text-align: left; cursor: pointer; border-bottom: 1px solid #eee; font-size: 18px; }
+        #menu button:hover { background: #f9f9f9; }
+        .resizer { position: absolute; right: 0; bottom: 0; width: 20px; height: 20px; cursor: nwse-resize; z-index: 200; }
+        .hidden { display: none !important; }
+        .winner-overlay { position: absolute; inset: 0; background: rgba(255,255,255,0.95); display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 1000; border-radius: 12px; }
+        .alarm-stop-btn { background: #e74c3c !important; color: white !important; font-weight: bold; display: none; animation: blinker 1s linear infinite; margin-top: 10px; width: 100%; }
+        @keyframes blinker { 50% { opacity: 0; } }
+    </style>
+</head>
+<body>
+
+<div id="sidebar">
+    <button class="side-btn btn-plus" onclick="toggleMenu()">+</button>
+    <button class="side-btn btn-save" onclick="saveToCloud()">💾</button>
+    <div id="kindergarten"></div>
+</div>
+
+<div id="menu">
+    <button onclick="createWidget('text')">📝 Schreiben</button>
+    <button onclick="createWidget('timer')">⏲️ Eieruhr</button>
+    <button onclick="createWidget('wheel')">🎡 Glücksrad</button>
+    <button onclick="createWidget('transporter')">🚚 Transporter</button>
+    <button onclick="createWidget('qr')">🔗 QR-Code</button>
+    <button onclick="createWidget('image')">🖼️ Bild</button>
+</div>
+
+<div id="workspace"></div>
+
+<script>
+    let g_theme = 'sepia';
+    let timers = {};
+    let pData = {};
+    let wheelData = {};
+    const icons = { text: '📝', timer: '⏲️', wheel: '🎡', qr: '🔗', transporter: '🚚', image: '🖼️' };
+    const palette = ['#000000', '#FF0000', '#0000FF', '#008000', '#FFA500', '#800080'];
+    const alarmAudio = new Audio('https://actions.google.com/sounds/v1/alarms/beep_loop.ogg');
+    alarmAudio.loop = true;
+
+    function toggleMenu() { const m = document.getElementById('menu'); m.style.display = (m.style.display === 'block') ? 'none' : 'block'; }
+    function toggleSettings(id) { document.getElementById(id).classList.toggle('show-settings'); }
+    
+    function focusW(id) { 
+        document.querySelectorAll('.widget').forEach(w => w.style.zIndex = 10);
+        const active = document.getElementById(id);
+        if(active) active.style.zIndex = 100;
+    }
+
+    function format(id, cmd, val = null) {
+        const editor = document.getElementById('ed-' + id);
+        editor.focus();
+        document.execCommand('styleWithCSS', false, true);
+        document.execCommand(cmd, false, val);
+    }
+
+    function setPenSize(id, size) { pData[id].size = size; }
+
+    function toggleFullsize(id) {
+        const w = document.getElementById(id);
+        const type = w.getAttribute('data-type');
+        const canvas = document.getElementById('canvas-' + id);
+        let snapshot = null;
+
+        if (type === 'text' && canvas) {
+            snapshot = canvas.toDataURL();
+        }
+
+        w.classList.toggle('fullsize');
+
+        if (type === 'text' && canvas) {
+            setTimeout(() => {
+                canvas.updateSize(); 
+                if (snapshot) {
+                    const ctx = canvas.getContext('2d');
+                    const img = new Image();
+                    img.onload = () => {
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    };
+                    img.src = snapshot;
+                }
+            }, 100);
+        }
+    }
+
+    function createWidget(type, config = {}) {
+        const id = config.id || 'w-' + Date.now();
+        const theme = config.theme || g_theme;
+        const w = document.createElement('div');
+        w.className = `widget theme-${theme}`;
+        w.id = id;
+        w.style.left = config.x || '120px';
+        w.style.top = config.y || '50px';
+        w.style.width = config.w || (type==='text'?'700px':'350px');
+        w.style.height = config.h || (type==='text'?'500px':'450px');
+        w.setAttribute('data-type', type);
+        w.style.zIndex = 10;
+        w.onmousedown = () => focusW(id);
+
+        let inner = '';
+        if (type === 'text') {
+            inner = `
+                <div class="toolbar" onmousedown="event.stopPropagation()">
+                    <select onchange="format('${id}', 'fontName', this.value)">
+                        <option value="Andika">Andika</option>
+                        <option value="Lora">Lora</option>
+                        <option value="Patrick Hand">Patrick Hand</option>
+                    </select>
+                    <select onchange="format('${id}', 'fontSize', this.value)">
+                        <option value="1">S</option><option value="3">M</option><option value="5">L</option>
+                        <option value="7" selected>XL</option>
+                    </select>
+                    <button class="ctrl-btn" onclick="format('${id}', 'bold')"><b>B</b></button>
+                    ${palette.map(c => `<div class="color-btn" style="background:${c}" onclick="format('${id}','foreColor','${c}')"></div>`).join('')}
+                </div>
+                <div class="draw-palette" onmousedown="event.stopPropagation()">
+                    ${palette.map(c => `<div class="color-btn" style="background:${c}" onclick="setPen('${id}','${c}')"></div>`).join('')}
+                    <button class="ctrl-btn" onclick="setPenSize('${id}', 2)">•</button>
+                    <button class="ctrl-btn" onclick="setPenSize('${id}', 8)">●</button>
+                    <button class="ctrl-btn" onclick="setPenSize('${id}', 20)">●●</button>
+                    <button class="ctrl-btn" onclick="setPen('${id}','eraser')">🧽</button>
+                    <button class="ctrl-btn" onclick="clearCanvas('${id}')">🗑️</button>
+                </div>
+                <div class="editor" contenteditable="true" spellcheck="false" id="ed-${id}">${config.val || 'Tippe hier...'}</div>
+                <canvas class="drawing-canvas" id="canvas-${id}"></canvas>`;
+        } else if (type === 'image') {
+            inner = `<div class="settings-panel"><input type="text" placeholder="Bild-URL..." onchange="updateImg('${id}', this.value)" value="${config.val || ''}" style="width:100%"></div>
+                     <img id="img-${id}" class="img-display" src="${config.val || 'https://via.placeholder.com/300?text=Bild+URL'}">`;
+        } else if (type === 'timer') {
+            inner = `
+                <div class="settings-panel">
+                    <select id="t-mode-${id}"><option value="1">Nur Klingeln</option><option value="2">Klingeln + Ansage</option></select>
+                    <input type="text" id="t-text-${id}" placeholder="Ansagetext..." style="width:100%; margin-top:5px;">
+                </div>
+                <div class="timer-display" id="t-disp-${id}">05:00</div>
+                <button class="ctrl-btn alarm-stop-btn" id="t-stop-${id}" onclick="stopAlarm('${id}')">ALARM STOPPEN</button>
+                <div style="display:flex; justify-content:center; gap:10px;">
+                    <button class="ctrl-btn" onclick="adjTimer('${id}', -60)">-1m</button>
+                    <button class="ctrl-btn" onclick="adjTimer('${id}', 60)">+1m</button>
+                    <button class="ctrl-btn" onclick="runTimer('${id}')">▶️</button>
+                    <button class="ctrl-btn" onclick="pauseTimer('${id}')">⏸️</button>
+                </div>`;
+            timers[id] = { sec: 300, interval: null };
+        } else if (type === 'wheel') {
+            inner = `<div class="winner-overlay" id="winner-overlay-${id}"><h1 id="winner-name-${id}"></h1><button class="ctrl-btn" onclick="closeWinner('${id}')">OK</button></div>
+                     <div class="wheel-wrap"><canvas class="wheel-canvas" id="canvas-wheel-${id}"></canvas></div>
+                     <div class="settings-panel">
+                        <input type="text" id="wheel-names-${id}" onchange="initWheel('${id}')" value="${config.val || 'Anna, Tom, Lisa'}" style="width:100%">
+                        <select id="wheel-mode-${id}"><option value="keep">Behalten</option><option value="remove">Einmal</option></select>
+                        <button class="ctrl-btn" onclick="initWheel('${id}')" style="margin-top:5px">Reset Liste</button>
+                     </div>
+                     <button class="ctrl-btn" style="width:100%; background:var(--accent); color:white;" onclick="spinWheel('${id}')">DREHEN</button>`;
+        } else if (type === 'transporter') {
+            const slots = config.val ? (typeof config.val === 'string' ? JSON.parse(config.val) : config.val) : [{l:'A', v:''}, {l:'B', v:''}, {l:'C', v:''}];
+            inner = `<div class="settings-panel">${slots.map((s,i) => `<div class="tp-row"><input class="tp-input" id="tpl-${id}-${i}" value="${s.l}" onchange="saveTP('${id}')"><button class="ctrl-btn" onclick="importTP('${id}', ${i})">⬇️</button><span id="tps-${id}-${i}" style="color:${s.v?'green':'red'}">●</span></div>`).join('')}</div><div class="tp-container" id="tpc-${id}"></div>`;
+            setTimeout(() => renderTP(id), 50);
+        } else if (type === 'qr') {
+            inner = `<div class="settings-panel"><input type="text" placeholder="URL..." onchange="updateQR('${id}', this.value)" value="${config.val || ''}" style="width:100%"></div><img id="qr-${id}" style="width:100%" src="${config.val ? 'https://api.qrserver.com/v1/create-qr-code/?data='+encodeURIComponent(config.val) : ''}">`;
+        }
+
+        w.innerHTML = `
+            <div class="widget-header" onmousedown="dragS(event,'${id}')">
+                <span>${icons[type]}</span>
+                <div class="header-controls">
+                    <span class="header-icon" title="Vollbild" onclick="toggleFullsize('${id}')">⛶</span>
+                    <span class="header-icon" onclick="toggleSettings('${id}')">⚙️</span>
+                    ${type==='text' ? `<span class="header-icon" onclick="toggleDraw('${id}')">✎</span>` : ''}
+                    <span class="header-icon" onclick="toggleTheme('${id}')">🌓</span>
+                    <span class="header-icon" onclick="remW('${id}')">×</span>
+                </div>
+            </div>
+            <div class="widget-content">${inner}</div>
+            <div class="resizer" onmousedown="resS(event,'${id}')"></div>`;
+
+        document.getElementById('workspace').appendChild(w);
+        addToKindergarten(id, type);
+        pData[id] = { color: '#000000', size: 4 };
+
+        if(type === 'text') setTimeout(() => initCanvas(id), 100);
+        if(type === 'wheel') setTimeout(() => initWheel(id), 100);
+        focusW(id);
+        if(!config.id) toggleMenu();
+    }
+
+    function initCanvas(id) {
+        const c = document.getElementById('canvas-'+id); if(!c) return; const ctx = c.getContext('2d');
+        const updateCSize = () => { c.width = c.parentElement.offsetWidth; c.height = c.parentElement.offsetHeight; };
+        updateCSize(); c.updateSize = updateCSize; 
+        let drawing = false;
+        c.onpointerdown = (e) => { if(!document.getElementById(id).classList.contains('draw-mode')) return; drawing = true; ctx.beginPath(); ctx.moveTo(e.offsetX, e.offsetY); c.setPointerCapture(e.pointerId); };
+        c.onpointermove = (e) => { 
+            if(!drawing) return; 
+            ctx.globalCompositeOperation = pData[id].color === 'eraser' ? 'destination-out' : 'source-over';
+            ctx.strokeStyle = pData[id].color === 'eraser' ? 'rgba(0,0,0,1)' : pData[id].color; 
+            ctx.lineWidth = pData[id].size; ctx.lineCap = 'round'; ctx.lineTo(e.offsetX, e.offsetY); ctx.stroke(); 
+        };
+        c.onpointerup = () => drawing = false;
+    }
+    function clearCanvas(id) { const c = document.getElementById('canvas-'+id); c.getContext('2d').clearRect(0,0,c.width,c.height); }
+    function setPen(id, col) { pData[id].color = col; }
+    function dragS(e, id) {
+        if(document.getElementById(id).classList.contains('fullsize') || e.target.closest('.header-controls') || e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT') return;
+        focusW(id); const w = document.getElementById(id); const sX = e.clientX-w.offsetLeft, sY = e.clientY-w.offsetTop;
+        const move = (m) => { w.style.left = (m.clientX-sX)+'px'; w.style.top = (m.clientY-sY)+'px'; };
+        const stop = () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', stop); };
+        document.addEventListener('mousemove', move); document.addEventListener('mouseup', stop);
+    }
+    function resS(e, id) {
+        if(document.getElementById(id).classList.contains('fullsize')) return;
+        const w = document.getElementById(id); const sW = w.offsetWidth, sH = w.offsetHeight, sX = e.clientX, sY = e.clientY;
+        const move = (m) => { w.style.width = (sW+(m.clientX-sX))+'px'; w.style.height = (sH+(m.clientY-sY))+'px'; };
+        const stop = () => { if(w.getAttribute('data-type')==='text') document.getElementById('canvas-'+id).updateSize(); document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', stop); };
+        document.addEventListener('mousemove', move); document.addEventListener('mouseup', stop);
+    }
+    function remW(id) { document.getElementById(id).remove(); document.getElementById('kg-btn-'+id).remove(); }
+    function toggleTheme(id) { document.getElementById(id).classList.toggle('theme-sepia'); document.getElementById(id).classList.toggle('theme-dark'); }
+    function toggleDraw(id) { document.getElementById(id).classList.toggle('draw-mode'); }
+    function adjTimer(id, d) { timers[id].sec = Math.max(0, timers[id].sec + d); updateTDisp(id); }
+    function updateTDisp(id) { let m = Math.floor(timers[id].sec/60), s = timers[id].sec%60; document.getElementById('t-disp-'+id).innerText = `${m}:${s<10?'0':''}${s}`; }
+    
+    function runTimer(id) { 
+        if(timers[id].interval) return; 
+        
+        // Entriegelt Audio beim ersten Klick auf Play (User Interaction)
+        alarmAudio.play().then(() => { alarmAudio.pause(); alarmAudio.currentTime = 0; }).catch(() => {});
+
+        timers[id].interval = setInterval(() => { 
+            if(timers[id].sec <= 0) { 
+                clearInterval(timers[id].interval); 
+                timers[id].interval = null;
+                startAlarmSequence(id);
+            } else { timers[id].sec--; updateTDisp(id); }
+        }, 1000); 
+    }
+    function pauseTimer(id) { clearInterval(timers[id].interval); timers[id].interval = null; }
+    
+    function startAlarmSequence(id) {
+        alarmAudio.currentTime = 0;
+        alarmAudio.play();
+        document.getElementById('t-stop-'+id).style.display = 'block';
+        if(document.getElementById('t-mode-'+id).value === "2") {
+            setTimeout(() => {
+                const txt = document.getElementById('t-text-'+id).value || "Die Zeit ist um";
+                const msg = new SpeechSynthesisUtterance(txt);
+                window.speechSynthesis.speak(msg);
+            }, 2000);
+        }
+    }
+
+    function stopAlarm(id) {
+        alarmAudio.pause(); alarmAudio.currentTime = 0;
+        window.speechSynthesis.cancel();
+        document.getElementById('t-stop-'+id).style.display = 'none';
+    }
+
+    function updateImg(id, url) { document.getElementById('img-'+id).src = url; }
+    function updateQR(id, v) { document.getElementById('qr-'+id).src = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(v)}`; }
+    function saveTP(id) { renderTP(id); }
+    async function importTP(id, i) { try { const t = await navigator.clipboard.readText(); if(t) { const inp = document.getElementById(`tpl-${id}-${i}`); inp.setAttribute('data-v', t); document.getElementById(`tps-${id}-${i}`).style.color = "green"; renderTP(id); } } catch(e) { alert("Clipboard-Fehler"); } }
+    function renderTP(id) {
+        const cont = document.getElementById(`tpc-${id}`); if(!cont) return; cont.innerHTML = '';
+        for(let i=0; i<3; i++) {
+            const inp = document.getElementById(`tpl-${id}-${i}`); const v = inp.getAttribute('data-v');
+            if(v) { const b = document.createElement('button'); b.className = 'tp-btn'; b.innerText = inp.value; b.onclick = () => { navigator.clipboard.writeText(v); b.innerText = "KOPIERT!"; setTimeout(()=>b.innerText=inp.value, 800); }; cont.appendChild(b); }
+        }
+    }
+    function addToKindergarten(id, type) {
+        const b = document.createElement('button'); b.className = 'side-btn btn-parked active'; b.id = 'kg-btn-'+id; b.innerHTML = icons[type];
+        b.onclick = () => { 
+            const w = document.getElementById(id); 
+            if(w.classList.contains('hidden')) { 
+                w.classList.remove('hidden'); b.classList.add('active'); focusW(id); 
+            } else { w.classList.add('hidden'); b.classList.remove('active'); } 
+        };
+        document.getElementById('kindergarten').appendChild(b);
+    }
+    function initWheel(id) { 
+        const input = document.getElementById('wheel-names-'+id).value; 
+        const names = input.split(',').map(n => n.trim()).filter(n => n); 
+        wheelData[id] = { angle: 0, currentNames: [...names] }; 
+        drawWheel(id); 
+    }
+    function drawWheel(id) {
+        const names = wheelData[id].currentNames; const c = document.getElementById('canvas-wheel-'+id); if(!c) return; 
+        const ctx = c.getContext('2d'); c.width = 800; c.height = 800;
+        if(names.length === 0) { ctx.clearRect(0,0,800,800); return; }
+        const arc = (Math.PI*2)/names.length;
+        names.forEach((n, i) => { 
+            ctx.beginPath(); ctx.fillStyle = `hsl(${i*(360/names.length)}, 70%, 60%)`; ctx.moveTo(400, 400); ctx.arc(400, 400, 380, i*arc, (i+1)*arc); ctx.fill(); 
+            ctx.save(); ctx.translate(400, 400); ctx.rotate(i*arc + arc/2); ctx.fillStyle = "white"; ctx.font = "bold 30px Arial"; ctx.fillText(n.substring(0,12), 160, 10); ctx.restore(); 
+        });
+    }
+    function spinWheel(id) {
+        if(wheelData[id].currentNames.length === 0) return; 
+        const extra = 1800 + Math.random()*2000; wheelData[id].angle += extra;
+        document.getElementById('canvas-wheel-'+id).style.transform = `rotate(${wheelData[id].angle}deg)`;
+        setTimeout(() => {
+            const deg = wheelData[id].angle % 360; const idx = Math.floor(((360 - deg + 90) % 360) / (360 / wheelData[id].currentNames.length));
+            const winner = wheelData[id].currentNames[idx]; document.getElementById('winner-name-'+id).innerText = winner; document.getElementById('winner-overlay-'+id).style.display = 'flex';
+            if(document.getElementById('wheel-mode-'+id).value === 'remove') { 
+                wheelData[id].currentNames.splice(idx, 1); 
+                setTimeout(() => drawWheel(id), 500); 
+            }
+        }, 4100);
+    }
+    function closeWinner(id) { document.getElementById('winner-overlay-'+id).style.display = 'none'; }
+
+    function saveToCloud() {
+        const data = [];
+        document.querySelectorAll('.widget').forEach(w => {
+            const t = w.getAttribute('data-type');
+            let v = w.querySelector('.editor')?.innerHTML || w.querySelector('input')?.value || "";
+            if(t === 'transporter') {
+                const slots = []; for(let i=0; i<3; i++) { const inp = w.querySelector(`#tpl-${w.id}-${i}`); slots.push({ l: inp.value, v: inp.getAttribute('data-v') || '' }); }
+                v = JSON.stringify(slots);
+            }
+            data.push({ type: t, x: w.style.left, y: w.style.top, w: w.style.width, h: w.style.height, val: v, theme: w.classList.contains('theme-dark') ? 'dark' : 'sepia' });
+        });
+        navigator.clipboard.writeText(window.location.origin + window.location.pathname + "?data=" + btoa(unescape(encodeURIComponent(JSON.stringify(data)))));
+        alert("Board-Link kopiert!");
+    }
+
+    window.onload = () => {
+        const p = new URLSearchParams(window.location.search);
+        if(p.has('data')) { try { JSON.parse(decodeURIComponent(escape(atob(p.get('data'))))).forEach(c => createWidget(c.type, c)); } catch(e) {} }
+    };
+</script>
+</body>
+</html>
