@@ -11,6 +11,20 @@
         :root { --board-bg: #1a252f; --sidebar-bg: #161b22; --accent: #27ae60; }
         * { box-sizing: border-box; font-family: 'Andika', sans-serif; }
         body { background-color: var(--board-bg); margin: 0; display: flex; height: 100vh; overflow: hidden; }
+        
+        /* NEU: Start-Overlay Style */
+        #start-overlay {
+            position: fixed; inset: 0; background: rgba(26, 37, 47, 0.95);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 9999; color: white; text-align: center;
+        }
+        .start-btn {
+            padding: 20px 40px; font-size: 24px; background: var(--accent);
+            color: white; border: none; border-radius: 15px; cursor: pointer;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3); transition: transform 0.2s;
+        }
+        .start-btn:hover { transform: scale(1.05); }
+
         #sidebar { width: 85px; background: var(--sidebar-bg); display: flex; flex-direction: column; align-items: center; padding-top: 20px; gap: 10px; z-index: 2000; border-right: 2px solid rgba(255,255,255,0.1); }
         .side-btn { width: 65px; height: 65px; border-radius: 15px; border: none; cursor: pointer; font-size: 28px; color: white; display: flex; align-items: center; justify-content: center; transition: transform 0.2s; }
         .btn-plus { background: var(--accent); }
@@ -59,6 +73,12 @@
 </head>
 <body>
 
+<div id="start-overlay">
+    <h1>Klassenzimmer-Board 3.0</h1>
+    <p>Klicke auf den Button, um die Sound-Ausgabe zu aktivieren.</p>
+    <button class="start-btn" onclick="initBoard()">Board aktivieren</button>
+</div>
+
 <div id="sidebar">
     <button class="side-btn btn-plus" onclick="toggleMenu()">+</button>
     <button class="side-btn btn-save" onclick="saveToCloud()">💾</button>
@@ -84,19 +104,20 @@
     const icons = { text: '📝', timer: '⏲️', wheel: '🎡', qr: '🔗', transporter: '🚚', image: '🖼️' };
     const palette = ['#000000', '#FF0000', '#0000FF', '#008000', '#FFA500', '#800080'];
     
-    // 1. STABILERE AUDIO-QUELLE (Pixabay MP3 statt Google Actions Loop)
     const alarmAudio = new Audio('https://cdn.pixabay.com/audio/2022/03/15/audio_73147f3747.mp3');
     alarmAudio.loop = true;
 
-    // 2. AUDIO-UNLOCK: Browser brauchen eine Nutzeraktion, um Ton zu erlauben
-    function unlockAudio() {
+    // NEU: Start-Funktion
+    function initBoard() {
+        // Audio entsperren
         alarmAudio.play().then(() => {
             alarmAudio.pause();
             alarmAudio.currentTime = 0;
-        }).catch(e => console.log("Audio wartet auf Interaktion"));
-        document.removeEventListener('click', unlockAudio);
+        }).catch(e => console.log("Audio Lock"));
+        
+        // Overlay entfernen
+        document.getElementById('start-overlay').style.display = 'none';
     }
-    document.addEventListener('click', unlockAudio);
 
     function toggleMenu() { const m = document.getElementById('menu'); m.style.display = (m.style.display === 'block') ? 'none' : 'block'; }
     function toggleSettings(id) { document.getElementById(id).classList.toggle('show-settings'); }
@@ -275,13 +296,8 @@
     function adjTimer(id, d) { timers[id].sec = Math.max(0, timers[id].sec + d); updateTDisp(id); }
     function updateTDisp(id) { let m = Math.floor(timers[id].sec/60), s = timers[id].sec%60; document.getElementById('t-disp-'+id).innerText = `${m}:${s<10?'0':''}${s}`; }
     
-    // 3. TIMER RUN: Ruft Unlock auf, falls noch nicht geschehen
     function runTimer(id) { 
         if(timers[id].interval) return; 
-        
-        // Sicherstellen, dass Audio freigeschaltet ist
-        alarmAudio.play().then(() => { alarmAudio.pause(); }).catch(e => console.log("Audio Lock"));
-
         timers[id].interval = setInterval(() => { 
             if(timers[id].sec <= 0) { 
                 clearInterval(timers[id].interval); 
@@ -293,21 +309,17 @@
 
     function pauseTimer(id) { clearInterval(timers[id].interval); timers[id].interval = null; }
     
-    // 4. ALARM SEQUENCE: Robusterer Start von Ton und Sprache
     function startAlarmSequence(id) {
         alarmAudio.currentTime = 0;
         alarmAudio.play().catch(e => {
-            console.error("Audio Playback Error:", e);
-            alert("Zeit abgelaufen! (Ton wurde vom Browser blockiert)");
+            console.error("Audio blockiert:", e);
+            alert("Zeit abgelaufen! (Ton wurde blockiert)");
         });
-        
         document.getElementById('t-stop-'+id).style.display = 'block';
-        
         if(document.getElementById('t-mode-'+id).value === "2") {
             const txt = document.getElementById('t-text-'+id).value || "Die Zeit ist abgelaufen";
             const msg = new SpeechSynthesisUtterance(txt);
             msg.lang = 'de-DE';
-            // Sound während der Sprache etwas leiser machen
             alarmAudio.volume = 0.4;
             msg.onend = () => { alarmAudio.volume = 1.0; };
             window.speechSynthesis.speak(msg);
@@ -315,8 +327,7 @@
     }
 
     function stopAlarm(id) {
-        alarmAudio.pause(); 
-        alarmAudio.currentTime = 0;
+        alarmAudio.pause(); alarmAudio.currentTime = 0;
         alarmAudio.volume = 1.0;
         window.speechSynthesis.cancel();
         document.getElementById('t-stop-'+id).style.display = 'none';
