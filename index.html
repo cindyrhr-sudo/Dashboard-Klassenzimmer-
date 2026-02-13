@@ -11,10 +11,10 @@
         :root { --board-bg: #1a252f; --sidebar-bg: #161b22; --accent: #27ae60; }
         * { box-sizing: border-box; font-family: 'Andika', sans-serif; }
         body { background-color: var(--board-bg); margin: 0; display: flex; height: 100vh; overflow: hidden; }
-        
+
         /* NEU: Start-Overlay Style */
         #start-overlay {
-            position: fixed; inset: 0; background: rgba(26, 37, 47, 0.95);
+            position: fixed; inset: 0; background: rgba(26, 37, 47, 0.98);
             display: flex; flex-direction: column; align-items: center; justify-content: center;
             z-index: 9999; color: white; text-align: center;
         }
@@ -22,6 +22,7 @@
             padding: 20px 40px; font-size: 24px; background: var(--accent);
             color: white; border: none; border-radius: 15px; cursor: pointer;
             box-shadow: 0 5px 15px rgba(0,0,0,0.3); transition: transform 0.2s;
+            margin-top: 20px;
         }
         .start-btn:hover { transform: scale(1.05); }
 
@@ -104,16 +105,21 @@
     const icons = { text: '📝', timer: '⏲️', wheel: '🎡', qr: '🔗', transporter: '🚚', image: '🖼️' };
     const palette = ['#000000', '#FF0000', '#0000FF', '#008000', '#FFA500', '#800080'];
     
+    // 1. Audio-Quelle
     const alarmAudio = new Audio('https://cdn.pixabay.com/audio/2022/03/15/audio_73147f3747.mp3');
     alarmAudio.loop = true;
 
-    // NEU: Start-Funktion
+    // NEU: Initialisierung beim ersten Klick
     function initBoard() {
         // Audio entsperren
         alarmAudio.play().then(() => {
             alarmAudio.pause();
             alarmAudio.currentTime = 0;
-        }).catch(e => console.log("Audio Lock"));
+            console.log("Audio entsperrt");
+        }).catch(e => console.log("Audio-Blockade"));
+        
+        // Sprach-Engine kurz "aufwecken"
+        window.speechSynthesis.speak(new SpeechSynthesisUtterance(""));
         
         // Overlay entfernen
         document.getElementById('start-overlay').style.display = 'none';
@@ -312,8 +318,8 @@
     function startAlarmSequence(id) {
         alarmAudio.currentTime = 0;
         alarmAudio.play().catch(e => {
-            console.error("Audio blockiert:", e);
-            alert("Zeit abgelaufen! (Ton wurde blockiert)");
+            console.error("Audio Error:", e);
+            alert("Zeit abgelaufen!");
         });
         document.getElementById('t-stop-'+id).style.display = 'block';
         if(document.getElementById('t-mode-'+id).value === "2") {
