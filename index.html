@@ -83,8 +83,20 @@
     let wheelData = {};
     const icons = { text: '📝', timer: '⏲️', wheel: '🎡', qr: '🔗', transporter: '🚚', image: '🖼️' };
     const palette = ['#000000', '#FF0000', '#0000FF', '#008000', '#FFA500', '#800080'];
-    const alarmAudio = new Audio('https://actions.google.com/sounds/v1/alarms/beep_loop.ogg');
+    
+    // 1. STABILERE AUDIO-QUELLE (Pixabay MP3 statt Google Actions Loop)
+    const alarmAudio = new Audio('https://cdn.pixabay.com/audio/2022/03/15/audio_73147f3747.mp3');
     alarmAudio.loop = true;
+
+    // 2. AUDIO-UNLOCK: Browser brauchen eine Nutzeraktion, um Ton zu erlauben
+    function unlockAudio() {
+        alarmAudio.play().then(() => {
+            alarmAudio.pause();
+            alarmAudio.currentTime = 0;
+        }).catch(e => console.log("Audio wartet auf Interaktion"));
+        document.removeEventListener('click', unlockAudio);
+    }
+    document.addEventListener('click', unlockAudio);
 
     function toggleMenu() { const m = document.getElementById('menu'); m.style.display = (m.style.display === 'block') ? 'none' : 'block'; }
     function toggleSettings(id) { document.getElementById(id).classList.toggle('show-settings'); }
@@ -109,22 +121,15 @@
         const type = w.getAttribute('data-type');
         const canvas = document.getElementById('canvas-' + id);
         let snapshot = null;
-
-        if (type === 'text' && canvas) {
-            snapshot = canvas.toDataURL();
-        }
-
+        if (type === 'text' && canvas) snapshot = canvas.toDataURL();
         w.classList.toggle('fullsize');
-
         if (type === 'text' && canvas) {
             setTimeout(() => {
                 canvas.updateSize(); 
                 if (snapshot) {
                     const ctx = canvas.getContext('2d');
                     const img = new Image();
-                    img.onload = () => {
-                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                    };
+                    img.onload = () => ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
                     img.src = snapshot;
                 }
             }, 100);
@@ -244,8 +249,10 @@
         };
         c.onpointerup = () => drawing = false;
     }
+
     function clearCanvas(id) { const c = document.getElementById('canvas-'+id); c.getContext('2d').clearRect(0,0,c.width,c.height); }
     function setPen(id, col) { pData[id].color = col; }
+    
     function dragS(e, id) {
         if(document.getElementById(id).classList.contains('fullsize') || e.target.closest('.header-controls') || e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT') return;
         focusW(id); const w = document.getElementById(id); const sX = e.clientX-w.offsetLeft, sY = e.clientY-w.offsetTop;
@@ -253,6 +260,7 @@
         const stop = () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', stop); };
         document.addEventListener('mousemove', move); document.addEventListener('mouseup', stop);
     }
+
     function resS(e, id) {
         if(document.getElementById(id).classList.contains('fullsize')) return;
         const w = document.getElementById(id); const sW = w.offsetWidth, sH = w.offsetHeight, sX = e.clientX, sY = e.clientY;
@@ -260,17 +268,19 @@
         const stop = () => { if(w.getAttribute('data-type')==='text') document.getElementById('canvas-'+id).updateSize(); document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', stop); };
         document.addEventListener('mousemove', move); document.addEventListener('mouseup', stop);
     }
+
     function remW(id) { document.getElementById(id).remove(); document.getElementById('kg-btn-'+id).remove(); }
     function toggleTheme(id) { document.getElementById(id).classList.toggle('theme-sepia'); document.getElementById(id).classList.toggle('theme-dark'); }
     function toggleDraw(id) { document.getElementById(id).classList.toggle('draw-mode'); }
     function adjTimer(id, d) { timers[id].sec = Math.max(0, timers[id].sec + d); updateTDisp(id); }
     function updateTDisp(id) { let m = Math.floor(timers[id].sec/60), s = timers[id].sec%60; document.getElementById('t-disp-'+id).innerText = `${m}:${s<10?'0':''}${s}`; }
     
+    // 3. TIMER RUN: Ruft Unlock auf, falls noch nicht geschehen
     function runTimer(id) { 
         if(timers[id].interval) return; 
         
-        // Entriegelt Audio beim ersten Klick auf Play (User Interaction)
-        alarmAudio.play().then(() => { alarmAudio.pause(); alarmAudio.currentTime = 0; }).catch(() => {});
+        // Sicherstellen, dass Audio freigeschaltet ist
+        alarmAudio.play().then(() => { alarmAudio.pause(); }).catch(e => console.log("Audio Lock"));
 
         timers[id].interval = setInterval(() => { 
             if(timers[id].sec <= 0) { 
@@ -280,23 +290,34 @@
             } else { timers[id].sec--; updateTDisp(id); }
         }, 1000); 
     }
+
     function pauseTimer(id) { clearInterval(timers[id].interval); timers[id].interval = null; }
     
+    // 4. ALARM SEQUENCE: Robusterer Start von Ton und Sprache
     function startAlarmSequence(id) {
         alarmAudio.currentTime = 0;
-        alarmAudio.play();
+        alarmAudio.play().catch(e => {
+            console.error("Audio Playback Error:", e);
+            alert("Zeit abgelaufen! (Ton wurde vom Browser blockiert)");
+        });
+        
         document.getElementById('t-stop-'+id).style.display = 'block';
+        
         if(document.getElementById('t-mode-'+id).value === "2") {
-            setTimeout(() => {
-                const txt = document.getElementById('t-text-'+id).value || "Die Zeit ist um";
-                const msg = new SpeechSynthesisUtterance(txt);
-                window.speechSynthesis.speak(msg);
-            }, 2000);
+            const txt = document.getElementById('t-text-'+id).value || "Die Zeit ist abgelaufen";
+            const msg = new SpeechSynthesisUtterance(txt);
+            msg.lang = 'de-DE';
+            // Sound während der Sprache etwas leiser machen
+            alarmAudio.volume = 0.4;
+            msg.onend = () => { alarmAudio.volume = 1.0; };
+            window.speechSynthesis.speak(msg);
         }
     }
 
     function stopAlarm(id) {
-        alarmAudio.pause(); alarmAudio.currentTime = 0;
+        alarmAudio.pause(); 
+        alarmAudio.currentTime = 0;
+        alarmAudio.volume = 1.0;
         window.speechSynthesis.cancel();
         document.getElementById('t-stop-'+id).style.display = 'none';
     }
@@ -305,6 +326,7 @@
     function updateQR(id, v) { document.getElementById('qr-'+id).src = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(v)}`; }
     function saveTP(id) { renderTP(id); }
     async function importTP(id, i) { try { const t = await navigator.clipboard.readText(); if(t) { const inp = document.getElementById(`tpl-${id}-${i}`); inp.setAttribute('data-v', t); document.getElementById(`tps-${id}-${i}`).style.color = "green"; renderTP(id); } } catch(e) { alert("Clipboard-Fehler"); } }
+    
     function renderTP(id) {
         const cont = document.getElementById(`tpc-${id}`); if(!cont) return; cont.innerHTML = '';
         for(let i=0; i<3; i++) {
@@ -312,6 +334,7 @@
             if(v) { const b = document.createElement('button'); b.className = 'tp-btn'; b.innerText = inp.value; b.onclick = () => { navigator.clipboard.writeText(v); b.innerText = "KOPIERT!"; setTimeout(()=>b.innerText=inp.value, 800); }; cont.appendChild(b); }
         }
     }
+
     function addToKindergarten(id, type) {
         const b = document.createElement('button'); b.className = 'side-btn btn-parked active'; b.id = 'kg-btn-'+id; b.innerHTML = icons[type];
         b.onclick = () => { 
@@ -322,12 +345,14 @@
         };
         document.getElementById('kindergarten').appendChild(b);
     }
+
     function initWheel(id) { 
         const input = document.getElementById('wheel-names-'+id).value; 
         const names = input.split(',').map(n => n.trim()).filter(n => n); 
         wheelData[id] = { angle: 0, currentNames: [...names] }; 
         drawWheel(id); 
     }
+
     function drawWheel(id) {
         const names = wheelData[id].currentNames; const c = document.getElementById('canvas-wheel-'+id); if(!c) return; 
         const ctx = c.getContext('2d'); c.width = 800; c.height = 800;
@@ -338,6 +363,7 @@
             ctx.save(); ctx.translate(400, 400); ctx.rotate(i*arc + arc/2); ctx.fillStyle = "white"; ctx.font = "bold 30px Arial"; ctx.fillText(n.substring(0,12), 160, 10); ctx.restore(); 
         });
     }
+
     function spinWheel(id) {
         if(wheelData[id].currentNames.length === 0) return; 
         const extra = 1800 + Math.random()*2000; wheelData[id].angle += extra;
@@ -351,6 +377,7 @@
             }
         }, 4100);
     }
+
     function closeWinner(id) { document.getElementById('winner-overlay-'+id).style.display = 'none'; }
 
     function saveToCloud() {
